@@ -1,118 +1,120 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
+import bcrypt from 'bcryptjs';
 import User from '../models/User.js';
 import { generateToken, protect } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// @route   POST /api/auth/signup
-// @desc    Register a new user
-// @access  Public
+/* =========================
+   SIGNUP
+========================= */
 router.post(
   '/signup',
   [
-    body('username')
-      .trim()
-      .isLength({ min: 3, max: 30 })
-      .withMessage('Username must be 3-30 characters'),
-    body('email').isEmail().normalizeEmail().withMessage('Invalid email address'),
-    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-    body('full_name').optional().trim()
+    body('username').trim().isLength({ min: 3, max: 30 }),
+    body('email').isEmail().normalizeEmail(),
+    body('password').isLength({ min: 6 }),
+    body('full_name').optional().trim(),
   ],
   async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ 
-        success: false, 
-        message: errors.array()[0].msg 
-      });
-    }
-
     try {
-      const { username, email, password, full_name } = req.body;
-
-      // Check if user already exists
-      const existingUser = await User.findOne({ $or: [{ email }, { username }] });
-      if (existingUser) {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
         return res.status(400).json({
           success: false,
-          message: existingUser.email === email ? 'Email already registered' : 'Username already taken',
+          message: errors.array()[0].msg,
         });
       }
 
-      // Create user
+      const { username, email, password, full_name } = req.body;
+
+      // check existing user
+      const existingUser = await User.findOne({
+        $or: [{ email }, { username }],
+      });
+
+      if (existingUser) {
+        return res.status(400).json({
+          success: false,
+          message: 'User already exists',
+        });
+      }
+
+      // hash password
+      const hashedPassword = await bcrypt.hash(password, 10);
+
       const user = await User.create({
         username,
         email,
-        password,
+        password: hashedPassword,
         fullName: full_name || username,
-        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=random`,
+        avatar: `https://ui-avatars.com/api/?name=${username}`,
+        isActive: true,
       });
 
       const token = generateToken(user._id);
 
       res.status(201).json({
         success: true,
-        message: 'Account created successfully! Please sign in.',
-        data: {
-          user: {
-            id: user._id,
-            username: user.username,
-            email: user.email,
-            fullName: user.fullName,
-            avatar: user.avatar,
-          },
-          token,
+        message: 'Account created successfully',
+        token,
+        user: {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          fullName: user.fullName,
+          avatar: user.avatar,
         },
       });
-    } catch (error) {
-      res.status(500).json({ 
-        success: false, 
-        message: 'Server error', 
-        error: error.message 
+    } catch (err) {
+      console.error('SIGNUP ERROR:', err);
+      res.status(500).json({
+        success: false,
+        message: 'Server error',
       });
     }
   }
 );
 
-// @route   POST /api/auth/signin
-// @desc    Login user
-// @access  Public
+/* =========================
+   SIGNIN (FIXED)
+========================= */
 router.post(
   '/signin',
   [
-    body('email').isEmail().normalizeEmail().withMessage('Invalid email address'),
-    body('password').notEmpty().withMessage('Password is required'),
+    body('email').isEmail(),
+    body('password').notEmpty(),
   ],
   async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ 
-        success: false, 
-        message: errors.array()[0].msg 
-      });
-    }
-
     try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: errors.array()[0].msg,
+        });
+      }
+
       const { email, password } = req.body;
 
-      // Find user and include password
+      // 🔥 IMPORTANT FIX: include password explicitly
       const user = await User.findOne({ email }).select('+password');
 
       if (!user) {
         return res.status(401).json({
           success: false,
-          message: 'Invalid email or password',
+          message: 'Invalid credentials',
         });
       }
 
-      // Check password
-      const isPasswordMatch = await user.comparePassword(password);
+      // compare password safely
+      const isMatch = await bcrypt.compare(password, user.password);
 
-      if (!isPasswordMatch) {
+      if (!isMatch) {
         return res.status(401).json({
           success: false,
-          message: 'Invalid email or password',
+          message: 'Invalid credentials',
         });
       }
 
@@ -141,22 +143,31 @@ router.post(
           stats: user.stats,
         },
       });
-    } catch (error) {
-      res.status(500).json({ 
-        success: false, 
-        message: 'Server error', 
-        error: error.message 
+    } catch (err) {
+      console.error('SIGNIN ERROR:', err);
+      res.status(500).json({
+        success: false,
+        message: 'Server error',
+        error: err.message,
       });
     }
   }
 );
 
-// @route   GET /api/auth/me
-// @desc    Get current logged in user
-// @access  Private
+/* =========================
+   GET CURRENT USER
+========================= */
 router.get('/me', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+      });
+    }
+
     res.json({
       success: true,
       user: {
@@ -172,11 +183,11 @@ router.get('/me', protect, async (req, res) => {
         createdAt: user.createdAt,
       },
     });
-  } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      message: 'Server error', 
-      error: error.message 
+  } catch (err) {
+    console.error('ME ERROR:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
     });
   }
 });
