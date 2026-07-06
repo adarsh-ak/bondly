@@ -6,7 +6,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import http from 'http';
 import { Server } from 'socket.io';
-
+import flagRoutes from './routes/flags.js';
 import connectDB from './config/db.js';
 
 import messageRoutes from './routes/messages.js';
@@ -98,6 +98,7 @@ app.use('/api/groups', groupRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/posts', postRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/flags', flagRoutes);
 
 // HEALTH
 app.get('/api/health', (req, res) => {

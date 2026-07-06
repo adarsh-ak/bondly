@@ -1,140 +1,143 @@
+/**
+ * routes/dashboard.js  (updated)
+ *
+ * All real DB queries. No mocks.
+ * - /stats          → live counts (3 cards: groups, activities, events scheduled)
+ * - /upcoming-events → real upcoming events from user's groups
+ * - /friends         → real accepted friends
+ */
+
 import express from 'express';
-import User from '../models/User.js';
+import User   from '../models/User.js';
+import Event  from '../models/Event.js';
+import Group  from '../models/Group.js';
+import Friend from '../models/Friend.js';
 import { protect } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// @route   GET /api/dashboard/stats
-// @desc    Get user dashboard stats
-// @access  Private
+/* ─────────────────────────────────────────────────────────────
+   GET /api/dashboard/stats
+   Three live counts for the three stat cards.
+   Also keeps user.stats in sync.
+───────────────────────────────────────────────────────────── */
 router.get('/stats', protect, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id);
-    
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found',
-      });
-    }
+    const userId = req.user._id;
+
+    // Groups the user is actually a member of
+    const groupsJoined = await Group.countDocuments({
+      members: userId,
+      isActive: true,
+    });
+
+    // Events the user is attending with status = 'going'
+    // Uses the attendees sub-document array on Event
+    const activitiesParticipated = await Event.countDocuments({
+      attendees: {
+        $elemMatch: { user: userId, status: 'going' },
+      },
+    });
+
+    // Events the user created/organised
+    const eventsScheduled = await Event.countDocuments({
+      organizer: userId,
+    });
+
+    // Keep user.stats in sync (used by profile page etc.)
+    await User.findByIdAndUpdate(userId, {
+      $set: {
+        'stats.groupsCount'     : groupsJoined,
+        'stats.activitiesCount' : activitiesParticipated,
+        'stats.eventsCount'     : eventsScheduled,
+      },
+    });
 
     res.json({
       success: true,
-      stats: {
-        groupsJoined: user.stats.groupsCount || 0,
-        activitiesParticipated: user.stats.activitiesCount || 0,
-        communityFriends: user.stats.friendsCount || 0,
-        eventsScheduled: user.stats.eventsCount || 0,
-      },
+      stats: { groupsJoined, activitiesParticipated, eventsScheduled },
     });
   } catch (error) {
-    console.error('Get dashboard stats error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Server error', 
-      error: error.message 
-    });
+    console.error('Dashboard stats error:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
   }
 });
 
-// @route   GET /api/dashboard/upcoming-events
-// @desc    Get upcoming events for user
-// @access  Private
+/* ─────────────────────────────────────────────────────────────
+   GET /api/dashboard/upcoming-events
+   Next 20 upcoming events from any group the user belongs to,
+   sorted by most-recently-created first (matches frontend sort).
+───────────────────────────────────────────────────────────── */
 router.get('/upcoming-events', protect, async (req, res) => {
   try {
-    // Mock events - replace with actual events from database later
-    const events = [
-      {
-        id: 1,
-        title: 'Weekend Coffee Meetup',
-        group: 'Coffee Lovers',
-        date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
-        time: '10:00 AM',
-        location: 'Downtown Cafe',
-        attendees: 12
-      },
-      {
-        id: 2,
-        title: 'Morning Yoga Session',
-        group: 'Fitness Group',
-        date: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
-        time: '7:00 AM',
-        location: 'Central Park',
-        attendees: 8
-      },
-      {
-        id: 3,
-        title: 'Book Club Discussion',
-        group: 'Book Readers',
-        date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
-        time: '6:00 PM',
-        location: 'Library Hall',
-        attendees: 15
-      }
-    ];
+    const groups = await Group.find({
+      members: req.user._id,
+      isActive: true,
+    }).select('_id');
 
-    res.json({
-      success: true,
-      events,
-    });
+    if (groups.length === 0) {
+      return res.json({ success: true, events: [] });
+    }
+
+    const groupIds = groups.map((g) => g._id);
+
+    const events = await Event.find({
+      group   : { $in: groupIds },
+      status  : { $in: ['upcoming', 'ongoing'] },
+      startDate: { $gte: new Date() },
+    })
+      .populate('group'    , 'name image')
+      .populate('organizer', 'username avatar')
+      .populate('attendees.user', 'username fullName avatar')
+      .sort({ createdAt: -1 })   // newest created first
+      .limit(20)
+      .lean();
+
+    res.json({ success: true, events });
   } catch (error) {
-    console.error('Get upcoming events error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Server error', 
-      error: error.message 
-    });
+    console.error('Dashboard upcoming-events error:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
   }
 });
 
-// @route   GET /api/dashboard/friends
-// @desc    Get user's friends list
-// @access  Private
+/* ─────────────────────────────────────────────────────────────
+   GET /api/dashboard/friends
+   Accepted friends with basic profile info.
+───────────────────────────────────────────────────────────── */
 router.get('/friends', protect, async (req, res) => {
   try {
-    // Mock friends - replace with actual friends from database later
-    const friends = [
-      {
-        id: 1,
-        name: 'Sarah Chen',
-        avatar: 'https://ui-avatars.com/api/?name=Sarah+Chen&background=random',
-        mutualGroups: 3,
-        status: 'online'
-      },
-      {
-        id: 2,
-        name: 'Mike Johnson',
-        avatar: 'https://ui-avatars.com/api/?name=Mike+Johnson&background=random',
-        mutualGroups: 2,
-        status: 'offline'
-      },
-      {
-        id: 3,
-        name: 'Emma Wilson',
-        avatar: 'https://ui-avatars.com/api/?name=Emma+Wilson&background=random',
-        mutualGroups: 4,
-        status: 'online'
-      },
-      {
-        id: 4,
-        name: 'Alex Kim',
-        avatar: 'https://ui-avatars.com/api/?name=Alex+Kim&background=random',
-        mutualGroups: 1,
-        status: 'online'
-      }
-    ];
+    const userId = req.user._id;
 
-    res.json({
-      success: true,
-      friends,
+    const friendships = await Friend.find({
+      $or: [
+        { requester: userId, status: 'accepted' },
+        { recipient: userId, status: 'accepted' },
+      ],
+    })
+      .populate('requester', 'username fullName avatar')
+      .populate('recipient', 'username fullName avatar')
+      .lean();
+
+    const friends = friendships.map((f) => {
+      const friend =
+        f.requester._id.toString() === userId.toString()
+          ? f.recipient
+          : f.requester;
+      return {
+        id          : friend._id,
+        name        : friend.fullName || friend.username,
+        username    : friend.username,
+        avatar      : friend.avatar ||
+          `https://ui-avatars.com/api/?name=${encodeURIComponent(friend.username)}`,
+        friendshipId: f._id,
+        status      : 'offline', // real-time status not implemented yet
+      };
     });
+
+    res.json({ success: true, friends });
   } catch (error) {
-    console.error('Get friends error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Server error', 
-      error: error.message 
-    });
+    console.error('Dashboard friends error:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
   }
 });
 
