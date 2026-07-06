@@ -6,27 +6,74 @@ import User from '../models/User.js';
 
 const router = express.Router();
 
+/**
+ * syncEventStatuses(ids)
+ *
+ * For a given list of event IDs, bulk-update their status in the DB
+ * based purely on startDate vs now — no endDate needed.
+ *
+ * Rules:
+ *   startDate > now           → 'upcoming'
+ *   startDate <= now          → 'completed'   (event time has passed)
+ *   status === 'cancelled'    → leave untouched
+ *
+ * We use bulkWrite so it's one round-trip regardless of how many events.
+ */
+async function syncEventStatuses(eventIds) {
+  if (!eventIds || eventIds.length === 0) return;
+  const now = new Date();
+
+  const ops = eventIds.map((id) => ({
+    updateOne: {
+      filter: {
+        _id   : id,
+        status: { $ne: 'cancelled' },      // never touch cancelled
+      },
+      update: [
+        {
+          $set: {
+            status: {
+              $cond: {
+                if  : { $gt: ['$startDate', now] },
+                then: 'upcoming',
+                else: 'completed',
+              },
+            },
+          },
+        },
+      ],
+    },
+  }));
+
+  await Event.bulkWrite(ops);
+}
+
 // @route   GET /api/events
 // @desc    Get all events with filters
 // @access  Private
 router.get('/', protect, async (req, res) => {
   try {
     const { groupId, status, startDate, endDate, page = 1, limit = 10 } = req.query;
-    
+
     const query = {};
-    
     if (groupId) query.group = groupId;
-    if (status) query.status = status;
     if (startDate || endDate) {
       query.startDate = {};
       if (startDate) query.startDate.$gte = new Date(startDate);
-      if (endDate) query.startDate.$lte = new Date(endDate);
+      if (endDate)   query.startDate.$lte = new Date(endDate);
     }
 
+    // First: find matching IDs so we can sync their statuses
+    const matchingIds = await Event.find(query).select('_id').lean();
+    await syncEventStatuses(matchingIds.map((e) => e._id));
+
+    // Now apply status filter AFTER sync
+    if (status) query.status = status;
+
     const events = await Event.find(query)
-      .populate('group', 'name image')
-      .populate('organizer', 'username avatar')
-      .populate('attendees.user', 'username avatar')
+      .populate('group',          'name image')
+      .populate('organizer',      'username avatar')
+      .populate('attendees.user', 'username avatar fullName')
       .sort({ startDate: 1 })
       .limit(parseInt(limit))
       .skip((parseInt(page) - 1) * parseInt(limit));
@@ -37,11 +84,11 @@ router.get('/', protect, async (req, res) => {
       success: true,
       data: events,
       pagination: {
-        page: parseInt(page),
+        page : parseInt(page),
         limit: parseInt(limit),
         total,
-        pages: Math.ceil(total / parseInt(limit))
-      }
+        pages: Math.ceil(total / parseInt(limit)),
+      },
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -212,16 +259,22 @@ router.post('/:id/leave', protect, async (req, res) => {
 // @access  Public
 router.get('/group/:groupId', async (req, res) => {
   try {
-    const { status = 'upcoming' } = req.query;
+    const { status } = req.query;
+
+    // Sync all non-cancelled events in this group first
+    const allIds = await Event.find({
+      group : req.params.groupId,
+      status: { $ne: 'cancelled' },
+    }).select('_id').lean();
+    await syncEventStatuses(allIds.map((e) => e._id));
+
+    // Build query after sync
     const query = { group: req.params.groupId };
-    
-    if (status !== 'all') {
-      query.status = status;
-    }
+    if (status && status !== 'all') query.status = status;
 
     const events = await Event.find(query)
-      .populate('organizer', 'username avatar')
-      .populate('attendees.user', 'username avatar')
+      .populate('organizer',      'username avatar fullName')
+      .populate('attendees.user', 'username avatar fullName')
       .sort({ startDate: 1 });
 
     res.json({ success: true, data: events });
@@ -235,21 +288,28 @@ router.get('/group/:groupId', async (req, res) => {
 // @access  Private
 router.get('/user/upcoming', protect, async (req, res) => {
   try {
-    // Get user's groups
-    const groups = await Group.find({ members: req.user._id }).select('_id');
-    const groupIds = groups.map(g => g._id);
+    const groups   = await Group.find({ members: req.user._id }).select('_id');
+    const groupIds = groups.map((g) => g._id);
+    if (groupIds.length === 0) return res.json({ success: true, data: [] });
 
-    // Get upcoming events from these groups
+    const now = new Date();
+
+    // Sync ALL events in user's groups first so DB status is accurate
+    const allIds = await Event.find({ group: { $in: groupIds }, status: { $ne: 'cancelled' } })
+      .select('_id').lean();
+    await syncEventStatuses(allIds.map((e) => e._id));
+
+    // Now query: startDate strictly in the future (upcoming)
     const events = await Event.find({
-      group: { $in: groupIds },
-      status: 'upcoming',
-      startDate: { $gte: new Date() }
+      group    : { $in: groupIds },
+      status   : { $ne: 'cancelled' },
+      startDate: { $gt: now },          // startDate has NOT passed yet
     })
-      .populate('group', 'name image')
-      .populate('organizer', 'username avatar')
-      .populate('attendees.user', 'username avatar')
+      .populate('group',          'name image')
+      .populate('organizer',      'username avatar')
+      .populate('attendees.user', 'username avatar fullName')
       .sort({ startDate: 1 })
-      .limit(20);
+      .limit(50);
 
     res.json({ success: true, data: events });
   } catch (error) {

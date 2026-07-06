@@ -75,8 +75,8 @@ router.get('/user/my-groups', protect, async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const group = await Group.findById(req.params.id)
-      .populate('creator', 'username avatar fullName')
-      .populate('members', 'username avatar fullName')
+      .populate('creator', 'username avatar fullName bio location interests createdAt stats')
+      .populate('members', 'username avatar fullName bio location interests createdAt stats banStatus flagCount')
       .populate('admins', 'username avatar fullName');
     
     if (!group) {
@@ -193,22 +193,48 @@ router.put('/:id', protect, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Group not found' });
     }
     
-    // Check if user is admin
-    if (!group.admins.includes(req.user._id)) {
+    // Check if user is admin or the creator
+    const userId = req.user._id.toString();
+    const isAuthorized =
+      group.creator.toString() === userId ||
+      group.admins.some((a) => a.toString() === userId);
+
+    if (!isAuthorized) {
       return res.status(403).json({ success: false, message: 'Not authorized to update this group' });
     }
     
-    const { name, description, category, location, image } = req.body;
+    const { name, description, category, location, image, rules, preferences } = req.body;
     
     if (name) group.name = name;
     if (description) group.description = description;
     if (category) group.category = category.toLowerCase();
     if (location !== undefined) group.location = location;
     if (image) group.image = image;
+
+    // Rules: replace whole array if provided (frontend sends the full updated list)
+    if (Array.isArray(rules)) {
+      group.rules = rules
+        .map((r) => (typeof r === 'string' ? r.trim() : ''))
+        .filter((r) => r.length > 0)
+        .slice(0, 20);
+    }
+
+    // Preferences: merge with existing so partial updates don't wipe other toggles
+    if (preferences && typeof preferences === 'object') {
+      group.preferences = {
+        ...group.preferences.toObject?.() ?? group.preferences,
+        ...preferences,
+      };
+    }
     
     await group.save();
+
+    const updated = await Group.findById(group._id)
+      .populate('creator', 'username avatar fullName')
+      .populate('members', 'username avatar fullName')
+      .populate('admins', 'username avatar fullName');
     
-    res.json({ success: true, data: group });
+    res.json({ success: true, data: updated });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
