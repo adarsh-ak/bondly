@@ -1,6 +1,6 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
-import bcrypt from 'bcryptjs';
+import bcrypt from 'bcryptjs';  // used in signin only — signup hashing is done by User model hook
 import User from '../models/User.js';
 import { generateToken, protect } from '../middleware/auth.js';
 
@@ -41,13 +41,14 @@ router.post(
         });
       }
 
-      // hash password
-      const hashedPassword = await bcrypt.hash(password, 10);
+      // Password is hashed automatically by the User model's pre('save') hook.
+      // Do NOT manually hash here — doing so causes double-hashing which
+      // makes bcrypt.compare() always fail on signin.
 
       const user = await User.create({
         username,
         email,
-        password: hashedPassword,
+        password,          // plain text — model hook hashes it before saving
         fullName: full_name || username,
         avatar: `https://ui-avatars.com/api/?name=${username}`,
         isActive: true,
