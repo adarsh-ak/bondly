@@ -1,6 +1,6 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
-import bcrypt from 'bcryptjs';  // used in signin only — signup hashing is done by User model hook
+import bcrypt from 'bcryptjs'; // used in signin only — signup hashing is done by User model hook
 import User from '../models/User.js';
 import { generateToken, protect } from '../middleware/auth.js';
 
@@ -41,7 +41,10 @@ router.post(
         });
       }
 
-      
+      const user = await User.create({
+        username,
+        email,
+        password,
         fullName: full_name || username,
         avatar: `https://ui-avatars.com/api/?name=${username}`,
         isActive: true,
