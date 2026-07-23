@@ -41,7 +41,14 @@ router.post(
         });
       }
 
-      
+      // Password is hashed automatically by the User model's pre('save') hook.
+      // Do NOT manually hash here — doing so causes double-hashing which
+      // makes bcrypt.compare() always fail on signin.
+
+      const user = await User.create({
+        username,
+        email,
+        password,          // plain text — model hook hashes it before saving
         fullName: full_name || username,
         avatar: `https://ui-avatars.com/api/?name=${username}`,
         isActive: true,
@@ -91,10 +98,9 @@ router.post(
       }
 
       const { email, password } = req.body;
-      const normalizedEmail = email ? email.toLowerCase().trim() : '';
 
-      // 🔥 IMPORTANT FIX: include password explicitly and use normalized email
-      const user = await User.findOne({ email: normalizedEmail }).select('+password');
+      // 🔥 IMPORTANT FIX: include password explicitly
+      const user = await User.findOne({ email }).select('+password');
 
       if (!user) {
         return res.status(401).json({

@@ -22,18 +22,12 @@ dotenv.config();
 
 const app = express();
 const server = http.createServer(app); // 🔥 IMPORTANT
-const corsOptions = {
-  origin: (origin, callback) => {
-    if (!origin || origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) {
-      return callback(null, true);
-    }
-    return callback(null, true);
-  },
-  credentials: true,
-};
-
 const io = new Server(server, {
-  cors: corsOptions,
+  cors: {
+    origin: 'http://localhost:5173',
+    credentials: true,
+  },
+  maxHttpBufferSize: 10 * 1024 * 1024, // 10MB — audio messages ke liye
 });
 
 // ================= GROUP CALL STATE =================
@@ -397,7 +391,12 @@ io.on('connection', (socket) => {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-app.use(cors(corsOptions));
+app.use(
+  cors({
+    origin: 'http://localhost:5173',
+    credentials: true,
+  })
+);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
