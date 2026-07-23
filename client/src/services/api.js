@@ -212,4 +212,21 @@ export const eventsAPI = {
   },
 };
 
+
+// --------------------
+// Messages API
+// --------------------
+export const messagesAPI = {
+  getConversations: () => api.get("/messages/conversations").then(r => r.data),
+  getMessages: (userId) => api.get(`/messages/${userId}`).then(r => r.data),
+  sendMessage: (data) => api.post("/messages/send", data).then(r => r.data),
+  uploadFile: (formData) =>
+    api.post("/messages/upload", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }).then(r => r.data),
+  markAsRead: (messageId) => api.patch(`/messages/${messageId}/read`).then(r => r.data),
+  deleteMessage: (messageId) => api.delete(`/messages/${messageId}`).then(r => r.data),
+};
+
+
 export default api;
