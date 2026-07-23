@@ -12,65 +12,55 @@ const CreatePost = () => {
   const [category, setCategory] = useState("general");
   const [location, setLocation] = useState("");
   const [media, setMedia] = useState(null);
-  const [mediaPreview, setMediaPreview] = useState(null);
-  const [loading, setLoading] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
   const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setMedia(file);
-      setMediaPreview(URL.createObjectURL(file));
-    }
-  };
-
-  const clearMedia = () => {
-    setMedia(null);
-    setMediaPreview(null);
+    setMedia(e.target.files[0]);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!content.trim() && !media) {
-      toast({ title: "Please write a caption or select a photo/video", variant: "destructive" });
+    if (!content.trim()) {
+      toast({ title: "Post content cannot be empty", variant: "destructive" });
       return;
     }
 
-    setLoading(true);
-
     // ✅ Create FormData
     const formData = new FormData();
-    formData.append("title", title || content.substring(0, 30) || "Community Post");
+    formData.append("title", title);
     formData.append("content", content);
     formData.append("category", category);
     formData.append("location", location);
-    if (media) formData.append("media", media);
+    if (media) formData.append("media", media); // ✅ keep as "media" (matches backend)
 
     try {
+      // ✅ Get token properly
       const token = user?.token || localStorage.getItem("token");
       if (!token) {
         toast({ title: "Please log in to create a post", variant: "destructive" });
-        setLoading(false);
         return;
       }
 
       const res = await fetch("http://localhost:5000/api/posts", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${token}`, // ✅ token is passed correctly
         },
         body: formData,
       });
 
       const data = await res.json();
+      console.log("🟢 Post response:", data);
 
       if (data.success) {
+        // ✅ Save new post in localStorage so Feed.jsx shows it instantly
         localStorage.setItem("newPost", JSON.stringify(data.data));
-        toast({ title: "✅ Post published successfully!" });
-        navigate("/feed");
+
+        toast({ title: "✅ Post created successfully!" });
+        navigate("/"); // go to Feed
       } else {
         toast({
           title: data.message || "Failed to create post",
@@ -79,84 +69,61 @@ const CreatePost = () => {
       }
     } catch (err) {
       console.error("❌ Error creating post:", err);
-      toast({ title: "Server error while publishing post", variant: "destructive" });
-    } finally {
-      setLoading(false);
+      toast({ title: "Server error", variant: "destructive" });
     }
   };
 
   return (
-    <div className="min-h-screen bg-background flex justify-center items-center p-4">
-      <Card className="w-full max-w-lg shadow-card bg-card border-2 border-[#e11d48]">
-        <CardContent className="p-6 md:p-8">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-semibold text-card-foreground">
-              Create a Post
-            </h2>
-            <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
-              Cancel
-            </Button>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4" encType="multipart/form-data">
+    <div className="min-h-screen bg-background flex justify-center items-center">
+      <Card className="w-full max-w-lg shadow-card bg-card">
+        <CardContent className="p-8 border border-gray-300">
+          <h2 className="text-2xl font-semibold mb-6 text-center">
+            Create a New Post
+          </h2>
+          <form
+            onSubmit={handleSubmit}
+            className="space-y-4"
+            encType="multipart/form-data"
+          >
             <input
               type="text"
-              placeholder="Title (optional)"
+              placeholder="Title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full p-3 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-[#e11d48]/50"
+              className="w-full p-3 border rounded-md focus:outline-none"
             />
             <textarea
-              placeholder="Share your experience with the community... (optional if photo/video is attached)"
+              placeholder="What's happening in your community?"
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              className="w-full h-28 p-3 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-[#e11d48]/50"
+              className="w-full h-32 p-3 border rounded-md focus:outline-none"
             />
             <input
               type="text"
-              placeholder="Location (optional)"
+              placeholder="Location"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
-              className="w-full p-3 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-[#e11d48]/50"
+              className="w-full p-3 border rounded-md focus:outline-none"
             />
-
-            <div>
-              <label className="block mb-2 text-sm font-medium text-foreground">
-                Upload Photo or Video
-              </label>
-              <input
-                type="file"
-                accept="image/*,video/*"
-                onChange={handleFileChange}
-                className="block w-full border border-border rounded-lg bg-background text-foreground cursor-pointer 
-                  file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 
-                  file:bg-[#e11d48] file:text-white hover:file:bg-[#be123c]"
-              />
-            </div>
-
-            {mediaPreview && (
-              <div className="relative mt-3 rounded-lg overflow-hidden border border-border bg-black/5 p-2">
-                {media?.type?.startsWith("video/") ? (
-                  <video src={mediaPreview} controls className="max-h-56 w-full object-contain rounded-md" />
-                ) : (
-                  <img src={mediaPreview} alt="Preview" className="max-h-56 w-full object-contain rounded-md" />
-                )}
-                <button
-                  type="button"
-                  onClick={clearMedia}
-                  className="absolute top-4 right-4 bg-red-600 text-white rounded-full p-1 text-xs hover:bg-red-700 shadow"
-                >
-                  ✕ Remove
-                </button>
-              </div>
-            )}
+            <div className="mt-4">
+  <label className="block mb-2 text-sm font-medium text-foreground">
+    Add Photo/Video
+  </label>
+  <input
+    type="file"
+    accept="image/*,video/*"
+    onChange={(e) => setMedia(e.target.files[0])}
+    className="block w-full border border-border rounded-lg bg-background text-foreground cursor-pointer 
+      file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 
+      file:bg-primary file:text-primary-foreground hover:file:bg-primary/80"
+  />
+</div>
 
             <Button
               type="submit"
-              disabled={loading}
-              className="w-full bg-[#e11d48] text-white hover:bg-[#be123c] font-semibold py-3 rounded-lg shadow-md mt-2"
+              className="w-full bg-gradient-primary hover:opacity-90"
             >
-              {loading ? "Publishing..." : "Post to Community Feed"}
+              Post
             </Button>
           </form>
         </CardContent>
