@@ -41,13 +41,11 @@ router.post(
         });
       }
 
-      // hash password
-      const hashedPassword = await bcrypt.hash(password, 10);
-
+      // Create user (User model's pre('save') hook automatically hashes the password)
       const user = await User.create({
         username,
         email,
-        password: hashedPassword,
+        password,
         fullName: full_name || username,
         avatar: `https://ui-avatars.com/api/?name=${username}`,
         isActive: true,
@@ -97,9 +95,10 @@ router.post(
       }
 
       const { email, password } = req.body;
+      const normalizedEmail = email ? email.toLowerCase().trim() : '';
 
-      // 🔥 IMPORTANT FIX: include password explicitly
-      const user = await User.findOne({ email }).select('+password');
+      // 🔥 IMPORTANT FIX: include password explicitly and use normalized email
+      const user = await User.findOne({ email: normalizedEmail }).select('+password');
 
       if (!user) {
         return res.status(401).json({

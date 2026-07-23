@@ -115,10 +115,10 @@ router.post("/", protect, upload.single("media"), async (req, res) => {
 
     const { content, location, category, groupId, eventDate } = req.body;
 
-    if (!content) {
+    if (!content && !req.file) {
       return res
         .status(400)
-        .json({ success: false, message: "Content is required" });
+        .json({ success: false, message: "Please provide a caption or upload a photo/video" });
     }
 
     const validCategories = ["general", "event", "announcement", "activity"];
@@ -127,10 +127,11 @@ router.post("/", protect, upload.single("media"), async (req, res) => {
       : "general";
 
     const imageUrl = req.file ? req.file.filename : null;
+    const postContent = content || (imageUrl ? "Shared media" : "");
 
     const post = await Post.create({
-      title: content.substring(0, 50) || "Untitled Post",
-      content,
+      title: postContent.substring(0, 50) || "Untitled Post",
+      content: postContent,
       location,
       category: finalCategory,
       eventDate: eventDate || null,
@@ -265,37 +266,38 @@ router.delete("/:id", protect, async (req, res) => {
   }
 });
 
-router.delete("/:postId/comments/:commentId", async (req, res) => {
+router.delete("/:postId/comments/:commentId", protect, async (req, res) => {
   try {
     const { postId, commentId } = req.params;
 
-    // ✅ Import your models at the top if not already imported
-    // import Post from "../models/Post.js";
-    // import Comment from "../models/Comment.js";
-
     const post = await Post.findById(postId);
     if (!post) {
-      return res.status(404).json({ message: "Post not found" });
+      return res.status(404).json({ success: false, message: "Post not found" });
     }
 
     const comment = await Comment.findById(commentId);
     if (!comment) {
-      return res.status(404).json({ message: "Comment not found" });
+      return res.status(404).json({ success: false, message: "Comment not found" });
     }
 
-    // ✅ Remove the comment reference from Post.comments array
+    // Check authorization: only comment author or post author can delete
+    if (comment.user.toString() !== req.user._id.toString() && post.author.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: "Not authorized to delete this comment" });
+    }
+
+    // Remove the comment reference from Post.comments array
     post.comments = post.comments.filter(
       (id) => id.toString() !== commentId.toString()
     );
     await post.save();
 
-    // ✅ Delete comment document
+    // Delete comment document
     await Comment.findByIdAndDelete(commentId);
 
-    res.status(200).json({ message: "Comment deleted successfully" });
+    res.status(200).json({ success: true, message: "Comment deleted successfully" });
   } catch (error) {
     console.error("Error deleting comment:", error);
-    res.status(500).json({ message: "Internal Server Error", error });
+    res.status(500).json({ success: false, message: "Internal Server Error", error: error.message });
   }
 });
 
