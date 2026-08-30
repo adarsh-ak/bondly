@@ -11,7 +11,6 @@ import express from 'express';
 import User   from '../models/User.js';
 import Event  from '../models/Event.js';
 import Group  from '../models/Group.js';
-import Friend from '../models/Friend.js';
 import { protect } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -96,47 +95,6 @@ router.get('/upcoming-events', protect, async (req, res) => {
     res.json({ success: true, events });
   } catch (error) {
     console.error('Dashboard upcoming-events error:', error);
-    res.status(500).json({ success: false, message: 'Server error', error: error.message });
-  }
-});
-
-/* ─────────────────────────────────────────────────────────────
-   GET /api/dashboard/friends
-   Accepted friends with basic profile info.
-───────────────────────────────────────────────────────────── */
-router.get('/friends', protect, async (req, res) => {
-  try {
-    const userId = req.user._id;
-
-    const friendships = await Friend.find({
-      $or: [
-        { requester: userId, status: 'accepted' },
-        { recipient: userId, status: 'accepted' },
-      ],
-    })
-      .populate('requester', 'username fullName avatar')
-      .populate('recipient', 'username fullName avatar')
-      .lean();
-
-    const friends = friendships.map((f) => {
-      const friend =
-        f.requester._id.toString() === userId.toString()
-          ? f.recipient
-          : f.requester;
-      return {
-        id          : friend._id,
-        name        : friend.fullName || friend.username,
-        username    : friend.username,
-        avatar      : friend.avatar ||
-          `https://ui-avatars.com/api/?name=${encodeURIComponent(friend.username)}`,
-        friendshipId: f._id,
-        status      : 'offline', // real-time status not implemented yet
-      };
-    });
-
-    res.json({ success: true, friends });
-  } catch (error) {
-    console.error('Dashboard friends error:', error);
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
   }
 });
