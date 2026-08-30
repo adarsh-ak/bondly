@@ -1,29 +1,19 @@
-
 import express from "express";
 import multer from "multer";
-import path from "path";
-import fs from "fs";
+import { CloudinaryStorage } from "multer-storage-cloudinary";
+import cloudinary from "../config/cloudinary.js";
 import { protect } from "../middleware/auth.js";
 import Post from "../models/Post.js";
 import User from "../models/User.js";
 import Comment from "../models/Comment.js"; 
 
 const router = express.Router();
-
-/* ---------------------------------------------------------------
-   🔧 Multer Configuration — Save uploads in /uploads folder
----------------------------------------------------------------- */
-const uploadDir = path.join(process.cwd(), "uploads");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
-}
-
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, "uploads/");
-  },
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + "-" + file.originalname);
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: "bondly_posts",
+    allowed_formats: ["jpg", "jpeg", "png", "gif", "mp4", "mov"],
+    resource_type: "auto", // images aur videos dono handle karega
   },
 });
 
@@ -105,7 +95,7 @@ router.post("/", protect, upload.single("media"), async (req, res) => {
     console.log("📩 Incoming POST /api/posts");
     console.log("User from protect middleware:", req.user);
     console.log("Body:", req.body);
-    console.log("File:", req.file ? req.file.filename : "No file uploaded");
+    console.log("File:", req.file ? req.file.path : "No file uploaded");
 
     if (!req.user) {
       return res
@@ -126,7 +116,7 @@ router.post("/", protect, upload.single("media"), async (req, res) => {
       ? category
       : "general";
 
-    const imageUrl = req.file ? req.file.filename : null;
+    const imageUrl = req.file ? req.file.path : null;
     const postContent = content || (imageUrl ? "Shared media" : "");
 
     const post = await Post.create({
@@ -250,13 +240,8 @@ router.delete("/:id", protect, async (req, res) => {
         .json({ success: false, message: "Unauthorized to delete this post" });
     }
 
-    // Optionally delete image file from uploads/
-    if (post.images && post.images.length > 0) {
-      for (const img of post.images) {
-        const filePath = path.join(uploadDir, img);
-        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      }
-    }
+    // Images ab Cloudinary pe hain, local filesystem se delete karne ki zaroorat nahi.
+    // (Cloudinary se bhi hatana ho to cloudinary.uploader.destroy(publicId) alag se use karo)
 
     await post.deleteOne();
     res.json({ success: true, message: "Post deleted successfully" });
@@ -303,5 +288,3 @@ router.delete("/:postId/comments/:commentId", protect, async (req, res) => {
 
 
 export default router;
-
-
