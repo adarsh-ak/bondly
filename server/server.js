@@ -40,7 +40,14 @@ const corsOptions = {
 };
 
 const io = new Server(server, {
-  cors: corsOptions,
+  cors: {
+    origin: [
+      "https://bondly-mu.vercel.app",
+      "http://localhost:5173",
+    ],
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
 });
 
 // ================= GROUP CALL STATE =================
@@ -403,6 +410,16 @@ io.on('connection', (socket) => {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+app.use(
+  cors({
+    origin: [
+      "https://bondly-mu.vercel.app",
+      "http://localhost:5173",
+    ],
+    credentials: true,
+  })
+);
 
 app.use(cors(corsOptions));
 
