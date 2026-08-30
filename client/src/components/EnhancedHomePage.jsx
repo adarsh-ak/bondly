@@ -2,8 +2,6 @@ import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Users, Heart, MessageCircle, TrendingUp, Star, MapPin, Calendar, Clock, ArrowRight, Camera, BookOpen, Car, Home as HomeIcon, GraduationCap, Wrench } from "lucide-react";
-import communityHero from "../assets/community-hero.jpg";
-// import dailyServices from "../assets/daily-services.jpg";
 import GroupCard from "../components/GroupCard";
 import UpcomingEvents from "../components/UpcomingEvents";
 
@@ -72,28 +70,28 @@ const EnhancedHomePage = ({ navigate, user }) => {
   ];
 
   const features = [
-    {
-      icon: Users,
-      title: "Interest Groups",
-      description: "Join communities around your hobbies and passions",
-      examples: ["Photography", "Cooking", "Sports", "Music"],
-      color: "bg-blue-50 text-blue-600",
-    },
-    {
-      icon: HomeIcon,
-      title: "Daily Necessities",
-      description: "Find essential services and local connections",
-      examples: ["Housing", "Tutoring", "Transportation", "Services"],
-      color: "bg-green-50 text-green-600",
-    },
-    {
-      icon: MessageCircle,
-      title: "Community Chat",
-      description: "Connect with neighbors and like-minded people",
-      examples: ["Group Messages", "Direct Chat", "Local Events"],
-      color: "bg-purple-50 text-purple-600",
-    },
-  ];
+  {
+    icon: Users,
+    title: "Interest Groups",
+    description: "Join communities around your hobbies and passions",
+    examples: ["Photography", "Cooking", "Sports", "Music"],
+    color: "bg-accent text-accent-foreground",
+  },
+  {
+    icon: HomeIcon,
+    title: "Daily Necessities",
+    description: "Find essential services and local connections",
+    examples: ["Housing", "Tutoring", "Transportation", "Services"],
+    color: "bg-primary/10 text-primary",
+  },
+  {
+    icon: MessageCircle,
+    title: "Community Chat",
+    description: "Connect with neighbors and like-minded people",
+    examples: ["Group Messages", "Direct Chat", "Local Events"],
+    color: "bg-secondary text-secondary-foreground",
+  },
+];
 
   const stats = [
     { label: "Active Communities", value: "1,200+", icon: Users },
@@ -136,19 +134,22 @@ const EnhancedHomePage = ({ navigate, user }) => {
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {features.map((feature, index) => (
-            <Card key={index} className="relative overflow-hidden hover:shadow-lg transition-shadow">
+            <Card key={index} className="relative overflow-hidden hover:shadow-lg transition-shadow border-border bg-card">
               <CardHeader>
                 <div className={`w-12 h-12 rounded-lg ${feature.color} flex items-center justify-center mb-4`}>
                   <feature.icon className="h-6 w-6" />
                 </div>
-                <CardTitle className="text-xl">{feature.title}</CardTitle>
-                <CardDescription className="text-base">{feature.description}</CardDescription>
+                <CardTitle className="text-xl text-foreground">{feature.title}</CardTitle>
+                <CardDescription className="text-base text-muted-foreground">{feature.description}</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
                   <div className="flex flex-wrap gap-2">
                     {feature.examples.map((example, i) => (
-                      <Badge key={i} variant="secondary" className="text-xs">
+                      <Badge
+                        key={i}
+                        className="text-xs border-primary bg-white text-primary hover:bg-primary hover:text-white"
+                      >
                         {example}
                       </Badge>
                     ))}
@@ -156,7 +157,7 @@ const EnhancedHomePage = ({ navigate, user }) => {
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    className="w-full"
+                    className="w-full bg-primary text-primary-foreground"
                     onClick={() => {
                       if (feature.title === 'Interest Groups') navigate('groups');
                       else if (feature.title === 'Daily Necessities') navigate('groups');

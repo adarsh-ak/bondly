@@ -16,20 +16,10 @@ const UpcomingEvents = () => {
     setError(null);
     
     try {
-      console.log('Fetching events from API...'); // Debug
       const response = await eventsAPI.getUserUpcomingEvents();
-      console.log('API Response:', response); // Debug log
-      
-      // Handle different response structures
       const eventData = response?.data || response?.events || [];
-      console.log('Event data:', eventData); // Debug
       setEvents(Array.isArray(eventData) ? eventData : []);
     } catch (err) {
-      console.error('Error fetching events:', err);
-      console.error('Error message:', err.message);
-      console.error('Error response:', err.response);
-      
-      // Check if it's a network/CORS error
       if (err.message.includes('<!doctype') || err.message.includes('Unexpected token')) {
         setError('Backend server is not responding. Please ensure the API server is running on the correct port.');
       } else if (err.response?.status === 404) {
@@ -69,13 +59,13 @@ const UpcomingEvents = () => {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-8">
-      <div className="flex items-center justify-between p-6 border-b border-gray-200">
-        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-          <Calendar className="h-5 w-5 text-blue-600" />
+    <div className="bg-card rounded-lg shadow-sm border border-border mb-8">
+      <div className="flex items-center justify-between p-6 border-b border-border">
+        <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+          <Calendar className="h-5 w-5 text-primary" />
           Upcoming Events
         </h2>
-        <button className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+        <button className="text-sm text-primary hover:text-primary/80 font-medium">
           View All
         </button>
       </div>
@@ -83,54 +73,54 @@ const UpcomingEvents = () => {
       <div className="p-6">
         {loading ? (
           <div className="text-center py-12">
-            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
-            <p className="mt-4 text-gray-600">Loading events...</p>
+            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent"></div>
+            <p className="mt-4 text-muted-foreground">Loading events...</p>
           </div>
         ) : error ? (
           <div className="text-center py-12">
-            <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-3" />
-            <p className="text-red-600 mb-4">{error}</p>
+            <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-3" />
+            <p className="text-destructive mb-4">{error}</p>
             <button 
               onClick={fetchEvents}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
             >
               Try Again
             </button>
           </div>
         ) : events.length === 0 ? (
           <div className="text-center py-12">
-            <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-            <p className="text-gray-600 mb-2">No upcoming events</p>
-            <p className="text-gray-500 text-sm">Join groups to see their events here</p>
+            <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-50" />
+            <p className="text-foreground mb-2">No upcoming events</p>
+            <p className="text-muted-foreground text-sm">Join groups to see their events here</p>
           </div>
         ) : (
           <div className="space-y-4">
             {events.map((event) => (
               <div
                 key={event._id || event.id}
-                className="flex items-start space-x-4 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200"
+                className="flex items-start space-x-4 p-4 bg-muted rounded-lg hover:bg-accent transition-colors border border-border"
               >
-                <div className="flex flex-col items-center justify-center bg-blue-50 rounded-lg p-3 min-w-[70px] border border-blue-200">
-                  <p className="text-xs text-gray-600 uppercase font-medium">
+                <div className="flex flex-col items-center justify-center bg-accent rounded-lg p-3 min-w-[70px] border border-border">
+                  <p className="text-xs text-muted-foreground uppercase font-medium">
                     {formatDate(event.date || event.startDate).split(' ')[0]}
                   </p>
-                  <p className="text-2xl font-bold text-blue-600">
+                  <p className="text-2xl font-bold text-primary">
                     {formatDate(event.date || event.startDate).split(' ')[1]}
                   </p>
                 </div>
                 
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-gray-900 mb-1 truncate">
+                  <h3 className="font-semibold text-foreground mb-1 truncate">
                     {event.title || event.name}
                   </h3>
                   
                   {event.group && (
-                    <span className="inline-block px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded mb-2">
+                    <span className="inline-block px-2 py-1 bg-accent text-accent-foreground text-xs font-medium rounded mb-2">
                       {event.group.name || event.group}
                     </span>
                   )}
                   
-                  <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
+                  <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                     <div className="flex items-center gap-1">
                       <Clock className="h-4 w-4" />
                       <span>{event.time || formatTime(event.date || event.startDate)}</span>
@@ -156,7 +146,7 @@ const UpcomingEvents = () => {
                   </div>
                 </div>
                 
-                <button className="px-4 py-2 text-sm font-medium text-blue-600 border border-blue-600 rounded-lg hover:bg-blue-50 transition-colors whitespace-nowrap">
+                <button className="px-4 py-2 text-sm font-medium text-primary border border-primary rounded-lg hover:bg-primary hover:text-primary-foreground transition-colors whitespace-nowrap">
                   View Details
                 </button>
               </div>

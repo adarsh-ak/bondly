@@ -222,7 +222,7 @@ const CreateGroup = () => {
               <div className="pt-4">
                 <Button
                   type="submit"
-                  className="w-full bg-gradient-primary hover:bg-primary-hover"
+                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
                   disabled={!formData.name || !formData.description || !formData.category || loading}
                 >
                   {loading ? 'Creating...' : 'Create Community'}

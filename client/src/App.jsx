@@ -7,13 +7,10 @@ import { AuthProvider, useAuth } from "../src/hooks/useAuth";
 import Navigation from "../src/components/Navigation";
 import HomePageComponent from "../src/components/HomePage";
 import EnhancedHomePage from "../src/components/EnhancedHomePage";
-import InterestsSection from "../src/components/InterestsSection";
-import DailyNecessitiesSection from "../src/components/DailyNecessitiesSection";
 import Footer from "../src/components/Footer";
 import EnhancedFeed from "../src/components/EnhancedFeed";
 import Groups from "../src/components/Groups";
 import Dashboard from "../src/components/Dashboard";
-import ChatPage from "../src/components/ChatPage";
 import ProfilePage from "../src/components/ProfilePage";
 import CreateGroup from "../src/components/CreateGroup";
 import EnhancedGroupDetails from "../src/components/EnhancedGroupDetails";
@@ -21,20 +18,15 @@ import Auth from "./pages/Auth";
 import CreatePost from "../src/components/CreatePost";
 import NotFound from "./pages/NotFound";
 import AboutUs from "./pages/AboutUs";
-import FriendsEnhanced from "./pages/FriendsEnhanced";
-import Suggestions from "./pages/Suggestions";
 import Messages from "./pages/Messages";
-// import GroupEvents from "./components/GroupEvents";
 import Events from "./pages/Event";
-import login from "./pages/login";
-import signup from "./pages/signup";
 
 const queryClient = new QueryClient();
 
 const AppLayout = ({ children }) => (
   <div className="min-h-screen bg-background">
     <Navigation />
-    <main>{children}</main>
+    <main className="pt-16">{children}</main>
     <Footer />
   </div>
 );
@@ -42,7 +34,7 @@ const AppLayout = ({ children }) => (
 const MessagesLayout = ({ children }) => (
   <div className="min-h-screen bg-background flex flex-col">
     <Navigation />
-    <main className="flex-1">{children}</main>
+    <main className="flex-1 pt-16">{children}</main>
   </div>
 );
 
@@ -53,12 +45,6 @@ const HomePageWrapper = () => {
     <div className="space-y-16">
       <HomePageComponent navigate={(page) => navigate(`/${page}`)} user={user} />
       <EnhancedHomePage navigate={(page) => navigate(`/${page}`)} user={user} />
-      <section className="container mx-auto px-4">
-        <InterestsSection />
-      </section>
-      <section className="container mx-auto px-4">
-        <DailyNecessitiesSection />
-      </section>
     </div>
   );
 };
@@ -79,12 +65,6 @@ const DashboardWrapper = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   return user ? <Dashboard navigate={(page) => navigate(`/${page}`)} user={user} /> : <HomePageComponent navigate={(page) => navigate(`/${page}`)} user={user} />;
-};
-
-const ChatWrapper = () => {
-  const { user } = useAuth();
-  const navigate = useNavigate();
-  return user ? <ChatPage navigate={(page) => navigate(`/${page}`)} user={user} /> : <HomePageComponent navigate={(page) => navigate(`/${page}`)} user={user} />;
 };
 
 const ProfileWrapper = () => {
@@ -114,16 +94,6 @@ const GroupDetailsWrapper = () => {
   return <EnhancedGroupDetails navigate={navigate} groupId={groupId} user={user} />;
 };
 
-const FriendsWrapper = () => {
-  const navigate = useNavigate();
-  return <FriendsEnhanced navigate={(page) => navigate(`/${page}`)} />;
-};
-
-const SuggestionsWrapper = () => {
-  const navigate = useNavigate();
-  return <Suggestions navigate={(page) => navigate(`/${page}`)} />;
-};
-
 const MessagesWrapper = () => {
   return <Messages />;
 };
@@ -147,17 +117,14 @@ const App = () => (
             <Route path="/feed" element={<AppLayout><FeedWrapper /></AppLayout>} />
             <Route path="/groups" element={<AppLayout><GroupsWrapper /></AppLayout>} />
             <Route path="/dashboard" element={<AppLayout><DashboardWrapper /></AppLayout>} />
-            <Route path="/chat" element={<AppLayout><ChatWrapper /></AppLayout>} />
             <Route path="/profile" element={<AppLayout><ProfileWrapper /></AppLayout>} />
             <Route path="/create-group" element={<AppLayout><CreateGroupWrapper /></AppLayout>} />
             <Route path="/group-details/:id" element={<AppLayout><GroupDetailsWrapper /></AppLayout>} />
-            <Route path="/friends" element={<AppLayout><FriendsWrapper /></AppLayout>} />
              
 
           <Route path="/create-post" element={<AppLayout><CreatePost /></AppLayout>} />
 
            
-            <Route path="/suggestions" element={<AppLayout><SuggestionsWrapper /></AppLayout>} />
             <Route path="/messages" element={<MessagesLayout><MessagesWrapper /></MessagesLayout>} />
             <Route path="/events" element={<AppLayout><EventsWrapper /></AppLayout>} />
           <Route path="/auth" element={<Auth />} />
