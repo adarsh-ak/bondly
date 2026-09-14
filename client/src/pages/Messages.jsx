@@ -783,7 +783,7 @@ export default function Messages() {
   // ================= LOAD DATA =================
 
   const loadMyGroups = useCallback(async () => {
-    const data = await apiFetch('/api/groups/user/my-groups');
+    const data = await apiFetch('/groups/user/my-groups');
     setMyGroups(data.data || []);
   }, []);
 
@@ -806,7 +806,7 @@ export default function Messages() {
 
   const loadMessages = useCallback(async () => {
     if (!activeChat) return;
-    const data = await apiFetch(`/api/messages/${activeChat._id}`);
+    const data = await apiFetch(`/messages/${activeChat._id}`);
     setMessages(data.messages || []);
   }, [activeChat]);
 
@@ -1205,7 +1205,7 @@ export default function Messages() {
       delete next[group._id];
       return next;
     });
-    const res = await apiFetch(`/api/groups/${group._id}`);
+    const res = await apiFetch(`/groups/${group._id}`);
     setGroupDetails(res.data);
   };
 
