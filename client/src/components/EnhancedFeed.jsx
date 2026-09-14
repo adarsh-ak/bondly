@@ -15,107 +15,161 @@ import { Avatar, AvatarFallback } from "../components/ui/avatar";
 import { useAuth } from "../hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../hooks/use-toast";
-import axios from "axios";
+import api from "../services/api";
 
-const API_URL = `${import.meta.env.VITE_URL}/posts`;
+// Backend server URL.
+// VITE_SOCKET_URL should be:
+// https://bondly-4zya.onrender.com
+const BACKEND_URL =
+  import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
 
 const Feed = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // ✅ Fetch posts
+  // Convert relative upload paths into full backend URLs
+  const normalizeMediaUrl = (url) => {
+    if (!url) return url;
+
+    if (
+      url.startsWith("http://") ||
+      url.startsWith("https://") ||
+      url.startsWith("data:") ||
+      url.startsWith("blob:")
+    ) {
+      return url;
+    }
+
+    const cleanUrl = url.startsWith("/") ? url : `/${url}`;
+
+    return `${BACKEND_URL}${cleanUrl}`;
+  };
+
+  // Normalize media fields returned by backend
+  const normalizePostMedia = (post) => {
+    const normalizedPost = { ...post };
+
+    if (Array.isArray(normalizedPost.images)) {
+      normalizedPost.images = normalizedPost.images.map((img) =>
+        normalizeMediaUrl(img)
+      );
+    }
+
+    if (normalizedPost.media) {
+      normalizedPost.media = normalizeMediaUrl(normalizedPost.media);
+    }
+
+    return normalizedPost;
+  };
+
+  // Fetch posts
   useEffect(() => {
     const fetchPosts = async () => {
       try {
-        const res = await fetch(API_URL);
-        const data = await res.json();
+        const res = await api.get("/posts");
+        const data = res.data;
 
         if (data.success) {
-          const fixed = data.data.map((p) => {
-            if (p.images?.length > 0) {
-              p.images = p.images.map((img) =>
-                img.startsWith("http")
-                  ? img
-                  : `http://localhost:5000/uploads/${img}`
-              );
-            } else if (p.media) {
-              p.media = p.media.startsWith("http")
-                ? p.media
-                : `http://localhost:5000/uploads/${p.media}`;
-            }
-            return p;
-          });
+          const fixed = Array.isArray(data.data)
+            ? data.data.map(normalizePostMedia)
+            : [];
 
           setPosts(fixed);
         } else {
-          toast({ title: "Failed to load posts", variant: "destructive" });
+          toast({
+            title: "Failed to load posts",
+            description: data.message || "Unable to fetch community posts.",
+            variant: "destructive",
+          });
         }
-      } catch {
+      } catch (error) {
+        console.error("Error loading posts:", error);
+
         toast({
           title: "Server error while loading posts",
+          description:
+            error.response?.data?.message ||
+            "Unable to connect to the server.",
           variant: "destructive",
         });
       } finally {
         setLoading(false);
       }
     };
-    fetchPosts();
-  }, []);
 
-  // ✅ Add new post from localStorage
+    if (user) {
+      fetchPosts();
+    } else {
+      setLoading(false);
+    }
+  }, [user, toast]);
+
+  // Add newly created post from localStorage
   useEffect(() => {
     const savedPost = localStorage.getItem("newPost");
+
     if (savedPost) {
-      const post = JSON.parse(savedPost);
-      if (post.images?.length > 0) {
-        post.images = post.images.map((img) =>
-          img.startsWith("http")
-            ? img
-            : `http://localhost:5000/uploads/${img}`
-        );
-      } else if (post.media) {
-        post.media = post.media.startsWith("http")
-          ? post.media
-          : `http://localhost:5000/uploads/${post.media}`;
+      try {
+        const post = JSON.parse(savedPost);
+        const normalizedPost = normalizePostMedia(post);
+
+        setPosts((prev) => [normalizedPost, ...prev]);
+
+        localStorage.removeItem("newPost");
+      } catch (error) {
+        console.error("Error reading saved post:", error);
+        localStorage.removeItem("newPost");
       }
-      setPosts((prev) => [post, ...prev]);
-      localStorage.removeItem("newPost");
     }
   }, []);
 
-  // ✅ Delete post
+  // Delete post
   const handleDelete = async (id) => {
     if (!user) {
-      toast({ title: "Please sign in first", variant: "destructive" });
+      toast({
+        title: "Please sign in first",
+        variant: "destructive",
+      });
       return;
     }
 
-    if (!window.confirm("Are you sure you want to delete this post?")) return;
+    if (!window.confirm("Are you sure you want to delete this post?")) {
+      return;
+    }
 
     try {
-      const res = await fetch(`${API_URL}/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${user.token}` },
-      });
-      const data = await res.json();
+      const res = await api.delete(`/posts/${id}`);
+      const data = res.data;
+
       if (data.success) {
         setPosts((prev) => prev.filter((p) => p._id !== id));
-        toast({ title: "🗑 Post deleted successfully" });
+
+        toast({
+          title: "🗑 Post deleted successfully",
+        });
       } else {
         toast({
           title: data.message || "Failed to delete post",
           variant: "destructive",
         });
       }
-    } catch {
-      toast({ title: "Server error", variant: "destructive" });
+    } catch (error) {
+      console.error("Error deleting post:", error);
+
+      toast({
+        title: "Server error",
+        description:
+          error.response?.data?.message || "Failed to delete the post.",
+        variant: "destructive",
+      });
     }
   };
 
-  // ✅ Like post
+  // Like post
   const handleLike = async (postId) => {
     if (!user) {
       toast({
@@ -127,18 +181,17 @@ const Feed = () => {
     }
 
     try {
-      const res = await fetch(`${API_URL}/${postId}/like`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${user.token}` },
-      });
-
-      const data = await res.json();
+      const res = await api.post(`/posts/${postId}/like`);
+      const data = res.data;
 
       if (data.success) {
         setPosts((prev) =>
           prev.map((p) =>
             p._id === postId
-              ? { ...p, likes: data.data.likes }
+              ? {
+                  ...p,
+                  likes: data.data.likes,
+                }
               : p
           )
         );
@@ -150,11 +203,17 @@ const Feed = () => {
       }
     } catch (error) {
       console.error("Error liking post:", error);
-      toast({ title: "Error liking post", variant: "destructive" });
+
+      toast({
+        title: "Error liking post",
+        description:
+          error.response?.data?.message || "Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
-  // ✅ Add comment
+  // Add comment
   const handleComment = async (postId, text) => {
     if (!user) {
       toast({
@@ -166,21 +225,21 @@ const Feed = () => {
     }
 
     try {
-      const res = await fetch(`${API_URL}/${postId}/comment`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${user.token}`,
-        },
-        body: JSON.stringify({ text }),
+      const res = await api.post(`/posts/${postId}/comment`, {
+        text,
       });
 
-      const data = await res.json();
+      const data = res.data;
 
       if (data.success) {
         setPosts((prev) =>
           prev.map((p) =>
-            p._id === postId ? { ...p, comments: data.data.comments } : p
+            p._id === postId
+              ? {
+                  ...p,
+                  comments: data.data.comments,
+                }
+              : p
           )
         );
       } else {
@@ -191,10 +250,17 @@ const Feed = () => {
       }
     } catch (error) {
       console.error("Error adding comment:", error);
-      toast({ title: "Error adding comment", variant: "destructive" });
+
+      toast({
+        title: "Error adding comment",
+        description:
+          error.response?.data?.message || "Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
+  // Delete comment
   const handleDeleteComment = async (postId, commentId) => {
     if (!user) {
       toast({
@@ -205,17 +271,24 @@ const Feed = () => {
       return;
     }
 
-    if (!window.confirm("Are you sure you want to delete this comment?")) return;
+    if (
+      !window.confirm("Are you sure you want to delete this comment?")
+    ) {
+      return;
+    }
 
     try {
-      await axios.delete(`${API_URL}/${postId}/comments/${commentId}`, {
-        headers: { Authorization: `Bearer ${user.token}` },
-      });
+      await api.delete(`/posts/${postId}/comments/${commentId}`);
 
       setPosts((prevPosts) =>
         prevPosts.map((p) =>
           p._id === postId
-            ? { ...p, comments: p.comments.filter((c) => c._id !== commentId) }
+            ? {
+                ...p,
+                comments: (p.comments || []).filter(
+                  (c) => c._id !== commentId
+                ),
+              }
             : p
         )
       );
@@ -231,7 +304,8 @@ const Feed = () => {
       toast({
         title: "Error",
         description:
-          error.response?.data?.message || "Failed to delete the comment.",
+          error.response?.data?.message ||
+          "Failed to delete the comment.",
         variant: "destructive",
         duration: 3000,
       });
@@ -247,13 +321,16 @@ const Feed = () => {
             <h1 className="text-2xl md:text-3xl font-extrabold text-foreground tracking-tight">
               Community Feed
             </h1>
+
             <p className="text-xs md:text-sm text-muted-foreground mt-0.5">
               Discover local experiences, updates & stories
             </p>
           </div>
 
           <Button
-            onClick={() => (user ? navigate("/create-post") : navigate("/auth"))}
+            onClick={() =>
+              user ? navigate("/create-post") : navigate("/auth")
+            }
             className="bg-[#e11d48] text-white hover:bg-[#be123c] font-semibold px-4 py-2 rounded-full shadow-md transition-all flex items-center space-x-1.5"
           >
             <Plus className="h-4 w-4" />
@@ -271,6 +348,7 @@ const Feed = () => {
                     You
                   </AvatarFallback>
                 </Avatar>
+
                 <button
                   onClick={() => navigate("/create-post")}
                   className="flex-1 text-left px-4 py-2.5 rounded-full bg-[#fff1f2] text-[#9f1239] text-xs md:text-sm font-medium transition-all hover:bg-[#ffe4e6] border border-[#fecdd3] hover:border-[#e11d48]"
@@ -315,12 +393,17 @@ const Feed = () => {
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#e11d48]/10 text-[#e11d48] shadow-xs">
                 <Lock className="w-8 h-8" />
               </div>
+
               <h2 className="text-2xl font-extrabold text-foreground tracking-tight">
                 Sign In to View Feed
               </h2>
+
               <p className="text-sm text-muted-foreground leading-relaxed">
-                The Community Feed is exclusive to registered members. Please sign in or create an account to discover stories, view photos & videos, and interact with your community.
+                The Community Feed is exclusive to registered members.
+                Please sign in or create an account to discover stories,
+                view photos & videos, and interact with your community.
               </p>
+
               <div className="pt-3 flex items-center justify-center space-x-3">
                 <Button
                   onClick={() => navigate("/auth")}
@@ -328,6 +411,7 @@ const Feed = () => {
                 >
                   Sign In
                 </Button>
+
                 <Button
                   onClick={() => navigate("/auth")}
                   variant="outline"
@@ -341,11 +425,18 @@ const Feed = () => {
         ) : loading ? (
           <div className="space-y-4 py-8 text-center">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-[#e11d48] border-t-transparent"></div>
-            <p className="text-sm text-muted-foreground">Loading feed posts...</p>
+
+            <p className="text-sm text-muted-foreground">
+              Loading feed posts...
+            </p>
           </div>
         ) : posts.length === 0 ? (
           <Card className="p-8 text-center border border-border shadow-sm rounded-2xl bg-card">
-            <p className="text-muted-foreground font-medium">No posts yet. Be the first to share something with your community!</p>
+            <p className="text-muted-foreground font-medium">
+              No posts yet. Be the first to share something with your
+              community!
+            </p>
+
             <Button
               onClick={() => navigate("/create-post")}
               className="mt-4 bg-[#e11d48] text-white hover:bg-[#be123c] rounded-full px-6"
@@ -373,38 +464,64 @@ const Feed = () => {
   );
 };
 
-// ✅ Modern PostCard Component
-const PostCard = ({ post, user, onLike, onDelete, onComment, onDeleteComment }) => {
+// Modern PostCard Component
+const PostCard = ({
+  post,
+  user,
+  onLike,
+  onDelete,
+  onComment,
+  onDeleteComment,
+}) => {
   const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(post.likes?.length || 0);
+  const [likeCount, setLikeCount] = useState(
+    post.likes?.length || 0
+  );
   const [comment, setComment] = useState("");
   const [showAllComments, setShowAllComments] = useState(false);
   const [shared, setShared] = useState(false);
+
   const commentInputRef = useRef(null);
 
   useEffect(() => {
     if (user && post.likes) {
       const userId = user.id || user._id;
-      setLiked(post.likes.some((id) => id === userId || id?._id === userId));
+
+      setLiked(
+        post.likes.some(
+          (id) => id === userId || id?._id === userId
+        )
+      );
     }
   }, [post.likes, user]);
 
+  useEffect(() => {
+    setLikeCount(post.likes?.length || 0);
+  }, [post.likes]);
+
   const handleLikeClick = () => {
     setLiked(!liked);
-    setLikeCount((prev) => (liked ? prev - 1 : prev + 1));
+    setLikeCount((prev) =>
+      liked ? Math.max(0, prev - 1) : prev + 1
+    );
+
     onLike(post._id);
   };
 
   const handleCommentSubmit = (e) => {
     e.preventDefault();
+
     if (!comment.trim()) return;
+
     onComment(post._id, comment.trim());
+
     setComment("");
     setShowAllComments(true);
   };
 
   const handleCommentIconClick = () => {
     setShowAllComments((prev) => !prev);
+
     if (commentInputRef.current) {
       commentInputRef.current.focus();
     }
@@ -412,10 +529,15 @@ const PostCard = ({ post, user, onLike, onDelete, onComment, onDeleteComment }) 
 
   const handleShare = async () => {
     const shareLink = `${window.location.origin}/post/${post._id}`;
+
     try {
       await navigator.clipboard.writeText(shareLink);
+
       setShared(true);
-      setTimeout(() => setShared(false), 1800);
+
+      setTimeout(() => {
+        setShared(false);
+      }, 1800);
     } catch {
       alert("❌ Could not copy link!");
     }
@@ -423,29 +545,67 @@ const PostCard = ({ post, user, onLike, onDelete, onComment, onDeleteComment }) 
 
   const getTimeAgo = (date) => {
     if (!date) return "Just now";
-    const diff = Math.floor((Date.now() - new Date(date)) / (1000 * 60));
+
+    const diff = Math.floor(
+      (Date.now() - new Date(date)) / (1000 * 60)
+    );
+
     if (diff < 1) return "Just now";
     if (diff < 60) return `${diff}m ago`;
+
     const hours = Math.floor(diff / 60);
+
     if (hours < 24) return `${hours}h ago`;
+
     const days = Math.floor(hours / 24);
+
     return `${days}d ago`;
   };
 
   // Author details
-  const authorObj = post.author && typeof post.author === "object" ? post.author : null;
+  const authorObj =
+    post.author && typeof post.author === "object"
+      ? post.author
+      : null;
+
   const currentUserId = user?.id || user?._id;
-  const isPostAuthor = user && (authorObj?._id === currentUserId || authorObj?.username === user.username || authorObj?.fullName === user.fullName);
-  
-  const rawAuthorName = authorObj?.fullName || authorObj?.username || post.user?.name || "Community Member";
+
+  const isPostAuthor =
+    user &&
+    (
+      authorObj?._id === currentUserId ||
+      authorObj?.username === user.username ||
+      authorObj?.fullName === user.fullName
+    );
+
+  const rawAuthorName =
+    authorObj?.fullName ||
+    authorObj?.username ||
+    post.user?.name ||
+    "Community Member";
+
   const authorName = isPostAuthor ? "You" : rawAuthorName;
+
   const avatarUrl = authorObj?.avatar || null;
-  const initials = isPostAuthor ? "You" : (rawAuthorName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) || "U");
+
+  const initials = isPostAuthor
+    ? "You"
+    : (
+        rawAuthorName
+          .split(" ")
+          .map((n) => n[0])
+          .join("")
+          .toUpperCase()
+          .slice(0, 2) || "U"
+      );
+
   const media = post.images?.[0] || post.media || null;
 
   const isVideo = (url) => {
     if (!url) return false;
+
     const lower = url.toLowerCase();
+
     return (
       lower.endsWith(".mp4") ||
       lower.endsWith(".webm") ||
@@ -455,9 +615,12 @@ const PostCard = ({ post, user, onLike, onDelete, onComment, onDeleteComment }) 
   };
 
   const allComments = post.comments || [];
-  const visibleComments = showAllComments ? allComments : allComments.slice(0, 2);
 
-  // Clean title display (don't repeat if title matches content)
+  const visibleComments = showAllComments
+    ? allComments
+    : allComments.slice(0, 2);
+
+  // Clean title display
   const shouldShowTitle =
     post.title &&
     post.title !== "Untitled Post" &&
@@ -472,22 +635,30 @@ const PostCard = ({ post, user, onLike, onDelete, onComment, onDeleteComment }) 
           <div className="flex items-center space-x-3">
             <Avatar className="h-11 w-11 border-2 border-[#e11d48]/20 shadow-xs">
               {avatarUrl ? (
-                <img src={avatarUrl} alt={authorName} className="h-full w-full object-cover" />
+                <img
+                  src={avatarUrl}
+                  alt={authorName}
+                  className="h-full w-full object-cover"
+                />
               ) : (
                 <AvatarFallback className="bg-rose-50 text-[#f43f5e] font-semibold text-xs border border-rose-100">
                   {initials}
                 </AvatarFallback>
               )}
             </Avatar>
+
             <div>
               <h3 className="font-bold text-foreground text-sm md:text-base leading-tight">
                 {authorName}
               </h3>
+
               <div className="flex items-center space-x-2 text-xs text-muted-foreground mt-0.5">
                 <span>{getTimeAgo(post.createdAt)}</span>
+
                 {post.location && (
                   <span className="flex items-center text-xs font-medium text-[#e11d48]">
-                    <MapPin className="h-3 w-3 mr-0.5 inline" /> {post.location}
+                    <MapPin className="h-3 w-3 mr-0.5 inline" />
+                    {post.location}
                   </span>
                 )}
               </div>
@@ -514,6 +685,7 @@ const PostCard = ({ post, user, onLike, onDelete, onComment, onDeleteComment }) 
               {post.title}
             </h4>
           )}
+
           {post.content && (
             <p className="text-foreground text-sm md:text-base leading-relaxed whitespace-pre-line text-left">
               {post.content.trim()}
@@ -521,11 +693,14 @@ const PostCard = ({ post, user, onLike, onDelete, onComment, onDeleteComment }) 
           )}
         </div>
 
-        {/* Media (Photo or Video) - Beautiful Frame without Clipping */}
+        {/* Media */}
         {media && (
           <div className="bg-slate-950/5 dark:bg-slate-900/50 flex items-center justify-center overflow-hidden border-y border-border/40 max-h-[460px]">
             {isVideo(media) ? (
-              <video controls className="w-full max-h-[460px] object-contain">
+              <video
+                controls
+                className="w-full max-h-[460px] object-contain"
+              >
                 <source src={media} />
                 Your browser does not support video playback.
               </video>
@@ -542,7 +717,7 @@ const PostCard = ({ post, user, onLike, onDelete, onComment, onDeleteComment }) 
 
         {/* Post Actions & Comments Area */}
         <div className="p-4 md:p-5 pt-3">
-          {/* Action Bar (Like / Comment / Share) */}
+          {/* Action Bar */}
           <div className="flex items-center justify-between py-2 border-b border-border/60">
             <div className="flex items-center space-x-3">
               {/* Like Button */}
@@ -554,7 +729,14 @@ const PostCard = ({ post, user, onLike, onDelete, onComment, onDeleteComment }) 
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
               >
-                <Heart className={`h-4 w-4 md:h-5 md:w-5 transition-transform active:scale-125 ${liked ? "fill-[#e11d48] text-[#e11d48]" : ""}`} />
+                <Heart
+                  className={`h-4 w-4 md:h-5 md:w-5 transition-transform active:scale-125 ${
+                    liked
+                      ? "fill-[#e11d48] text-[#e11d48]"
+                      : ""
+                  }`}
+                />
+
                 <span>{likeCount}</span>
               </button>
 
@@ -575,7 +757,9 @@ const PostCard = ({ post, user, onLike, onDelete, onComment, onDeleteComment }) 
               title="Share post"
             >
               {shared ? (
-                <span className="text-emerald-600 font-bold text-xs">Link Copied! ✔</span>
+                <span className="text-emerald-600 font-bold text-xs">
+                  Link Copied! ✔
+                </span>
               ) : (
                 <>
                   <Share2 className="h-4 w-4 md:h-5 md:w-5" />
@@ -587,43 +771,84 @@ const PostCard = ({ post, user, onLike, onDelete, onComment, onDeleteComment }) 
 
           {/* Comments Section */}
           <div className="mt-3 space-y-2.5">
-            {/* Display at most 2 comments initially */}
+            {/* Comments */}
             {visibleComments.length > 0 &&
               visibleComments.map((c) => {
-                const commentUser = c.user && typeof c.user === "object" ? c.user : null;
-                const commentUserId = commentUser?._id || c.user;
-                const isCommentAuthor = user && (commentUserId === currentUserId || commentUser?.username === user.username || commentUser?.fullName === user.fullName);
-                const commentRawUsername = commentUser?.fullName || commentUser?.username || "Member";
-                const commentUsername = isCommentAuthor ? "You" : commentRawUsername;
-                const commentInitials = isCommentAuthor ? "You" : (commentRawUsername.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) || "U");
-                const canDelete = isCommentAuthor || isPostAuthor;
+                const commentUser =
+                  c.user && typeof c.user === "object"
+                    ? c.user
+                    : null;
+
+                const commentUserId =
+                  commentUser?._id || c.user;
+
+                const isCommentAuthor =
+                  user &&
+                  (
+                    commentUserId === currentUserId ||
+                    commentUser?.username === user.username ||
+                    commentUser?.fullName === user.fullName
+                  );
+
+                const commentRawUsername =
+                  commentUser?.fullName ||
+                  commentUser?.username ||
+                  "Member";
+
+                const commentUsername = isCommentAuthor
+                  ? "You"
+                  : commentRawUsername;
+
+                const commentInitials = isCommentAuthor
+                  ? "You"
+                  : (
+                      commentRawUsername
+                        .split(" ")
+                        .map((n) => n[0])
+                        .join("")
+                        .toUpperCase()
+                        .slice(0, 2) || "U"
+                    );
+
+                const canDelete =
+                  isCommentAuthor || isPostAuthor;
 
                 return (
-                  <div key={c._id} className="flex items-start justify-between space-x-2 group">
+                  <div
+                    key={c._id}
+                    className="flex items-start justify-between space-x-2 group"
+                  >
                     <div className="flex items-start space-x-2.5 flex-1">
                       <Avatar className="h-7 w-7 mt-1 border border-border">
                         <AvatarFallback className="text-[9px] bg-rose-50 text-[#f43f5e] font-semibold border border-rose-100">
                           {commentInitials}
                         </AvatarFallback>
                       </Avatar>
+
                       <div className="bg-slate-100 dark:bg-muted/70 px-3.5 py-2 rounded-2xl text-xs md:text-sm flex-1 text-left">
                         <div className="flex items-center justify-between mb-0.5 text-left">
                           <span className="font-bold text-foreground text-xs text-left">
                             {commentUsername}
                           </span>
+
                           {c.createdAt && (
                             <span className="text-[10px] text-muted-foreground">
                               {getTimeAgo(c.createdAt)}
                             </span>
                           )}
                         </div>
-                        <p className="text-foreground leading-snug text-left mt-0.5 whitespace-pre-line">{c.text?.trim()}</p>
+
+                        <p className="text-foreground leading-snug text-left mt-0.5 whitespace-pre-line">
+                          {c.text?.trim()}
+                        </p>
                       </div>
                     </div>
 
                     {canDelete && (
                       <button
-                        onClick={() => onDeleteComment(post._id, c._id)}
+                        onClick={() =>
+                          onDeleteComment(post._id, c._id)
+                        }
                         className="text-muted-foreground hover:text-red-600 p-1 transition-opacity opacity-70 hover:opacity-100"
                         title="Delete comment"
                       >
@@ -634,10 +859,12 @@ const PostCard = ({ post, user, onLike, onDelete, onComment, onDeleteComment }) 
                 );
               })}
 
-            {/* Toggle view all remaining comments button */}
+            {/* Toggle view all comments */}
             {allComments.length > 2 && (
               <button
-                onClick={() => setShowAllComments(!showAllComments)}
+                onClick={() =>
+                  setShowAllComments(!showAllComments)
+                }
                 className="text-xs text-[#e11d48] font-bold hover:underline pt-1 block"
               >
                 {showAllComments
@@ -646,8 +873,11 @@ const PostCard = ({ post, user, onLike, onDelete, onComment, onDeleteComment }) 
               </button>
             )}
 
-            {/* Add Comment Input Bar */}
-            <form onSubmit={handleCommentSubmit} className="flex items-center space-x-2 pt-2">
+            {/* Add Comment Input */}
+            <form
+              onSubmit={handleCommentSubmit}
+              className="flex items-center space-x-2 pt-2"
+            >
               <input
                 ref={commentInputRef}
                 value={comment}
@@ -655,6 +885,7 @@ const PostCard = ({ post, user, onLike, onDelete, onComment, onDeleteComment }) 
                 placeholder="Write a comment..."
                 className="flex-1 border border-border/80 rounded-full px-4 py-2 text-xs md:text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-[#e11d48]/50 shadow-xs"
               />
+
               <button
                 type="submit"
                 disabled={!comment.trim()}

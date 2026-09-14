@@ -9,8 +9,20 @@ import { ScrollArea } from '../components/ui/scroll-area';
 import { useAuth } from '../hooks/useAuth';
 import { io } from 'socket.io-client';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-const socket = io(API);
+const API =
+  import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+const SOCKET_URL =
+  import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+
+const socket = io(SOCKET_URL, {
+  transports: ['websocket', 'polling'],
+  withCredentials: true,
+  reconnection: true,
+  reconnectionAttempts: Infinity,
+  reconnectionDelay: 2000,
+  timeout: 20000,
+});
 
 // ============================================================
 // FIX #1: STUN-only ICE config sirf tab kaam karta hai jab dono
