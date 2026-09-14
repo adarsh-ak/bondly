@@ -1,10 +1,10 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../hooks/use-toast";
 import { useAuth } from "../hooks/useAuth";
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
+import api from "../services/api";
 
 const CreatePost = () => {
   const [title, setTitle] = useState("");
@@ -57,15 +57,14 @@ const CreatePost = () => {
         return;
       }
 
-      const res = await fetch("http://localhost:5000/api/posts", {
-        method: "POST",
+      const res = await api.post("/posts", formData, {
         headers: {
           Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
         },
-        body: formData,
       });
+      const data = res.data;
 
-      const data = await res.json();
 
       if (data.success) {
         localStorage.setItem("newPost", JSON.stringify(data.data));
