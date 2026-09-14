@@ -17,7 +17,7 @@ import { useNavigate } from "react-router-dom";
 import { useToast } from "../hooks/use-toast";
 import axios from "axios";
 
-const API_URL = "http://localhost:5000/api/posts";
+const API_URL = `${import.meta.env.VITE_URL}/posts`;
 
 const Feed = () => {
   const { user } = useAuth();

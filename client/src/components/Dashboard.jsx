@@ -204,7 +204,7 @@ function ActiveGroupsPanel({ onClose }) {
   const [expandedGroup, setExpandedGroup] = useState(null);
 
   useEffect(() => {
-    apiFetch("/api/groups/user/my-groups")
+    apiFetch("/groups/user/my-groups")
       .then((d) => setGroups(d.data || []))
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -213,7 +213,7 @@ function ActiveGroupsPanel({ onClose }) {
   const loadGroupEvents = useCallback(async (groupId) => {
     if (groupEvents[groupId]) return;
     try {
-      const d = await apiFetch(`/api/events/group/${groupId}?status=all`);
+      const d = await apiFetch(`/events/group/${groupId}?status=all`);
       setGroupEvents((prev) => ({ ...prev, [groupId]: d.data || [] }));
     } catch {
       setGroupEvents((prev) => ({ ...prev, [groupId]: [] }));
@@ -341,7 +341,7 @@ function ActivitiesPanel({ onClose, currentUserId }) {
   const fetchUpcoming = useCallback(async () => {
     setUpcomingLoading(true);
     try {
-      const d = await apiFetch("/api/events/user/upcoming");
+      const d = await apiFetch("/events/user/upcoming");
       const now = Date.now();
       const sorted = (d.data || [])
         .filter((e) => e.status !== 'cancelled' && new Date(e.startDate).getTime() > now)
@@ -363,13 +363,13 @@ function ActivitiesPanel({ onClose, currentUserId }) {
     setPastLoading(true);
     try {
       // Get all groups first, then fetch completed events from those groups
-      const gd = await apiFetch("/api/groups/user/my-groups");
+      const gd = await apiFetch("/groups/user/my-groups");
       const groupIds = (gd.data || []).map((g) => g._id);
       if (groupIds.length === 0) { setPast([]); return; }
 
       // Fetch completed events with full attendee population
       const promises = groupIds.map((gid) =>
-        apiFetch(`/api/events/group/${gid}?status=all`).catch(() => ({ data: [] }))
+        apiFetch(`/events/group/${gid}?status=all`).catch(() => ({ data: [] }))
       );
       const results = await Promise.all(promises);
       const allEvents = results.flatMap((r) => r.data || []);
@@ -396,7 +396,7 @@ function ActivitiesPanel({ onClose, currentUserId }) {
   // ── join / leave event ──
   const handleJoin = async (eventId) => {
     try {
-      await apiFetch(`/api/events/${eventId}/join`, { method: "POST", body: JSON.stringify({ status: "going" }) });
+      await apiFetch(`/events/${eventId}/join`, { method: "POST", body: JSON.stringify({ status: "going" }) });
       toast({ title: "✅ You're now attending this event!" });
       fetchUpcoming();
     } catch (e) {
@@ -406,7 +406,7 @@ function ActivitiesPanel({ onClose, currentUserId }) {
 
   const handleLeave = async (eventId) => {
     try {
-      await apiFetch(`/api/events/${eventId}/leave`, { method: "POST" });
+      await apiFetch(`/events/${eventId}/leave`, { method: "POST" });
       toast({ title: "You've left this event." });
       fetchUpcoming();
     } catch (e) {
@@ -622,7 +622,7 @@ function EventsScheduledPanel({ onClose, currentUserId }) {
 
   useEffect(() => {
     // Fetch events created by the current user
-    apiFetch("/api/events?limit=50")
+    apiFetch("/events?limit=50")
       .then((d) => {
         const mine = (d.data || []).filter(
           (e) => e.organizer?._id === currentUserId || e.organizer === currentUserId
@@ -885,7 +885,7 @@ export default function Dashboard() {
   // fetch stats
   useEffect(() => {
     if (!user) { navigate("/auth"); return; }
-    apiFetch("/api/dashboard/stats")
+    apiFetch("/dashboard/stats")
       .then(({ stats: s }) => setStats({
         groupsJoined: s.groupsJoined,
         activitiesParticipated: s.activitiesParticipated,
@@ -900,7 +900,7 @@ export default function Dashboard() {
     setEventsLoading(true);
     setEventsError(null);
     try {
-      const d = await apiFetch("/api/events/user/upcoming");
+      const d = await apiFetch("/events/user/upcoming");
       const now = Date.now();
       // Client-side guard: only truly future events
       const sorted = (d.data || [])
@@ -928,7 +928,7 @@ export default function Dashboard() {
   // join / leave from main list
   const handleJoin = async (eventId) => {
     try {
-      await apiFetch(`/api/events/${eventId}/join`, { method: "POST", body: JSON.stringify({ status: "going" }) });
+      await apiFetch(`/events/${eventId}/join`, { method: "POST", body: JSON.stringify({ status: "going" }) });
       toast({ title: "✅ You're now attending this event!" });
       fetchEvents();
     } catch (e) {
@@ -938,7 +938,7 @@ export default function Dashboard() {
 
   const handleLeave = async (eventId) => {
     try {
-      await apiFetch(`/api/events/${eventId}/leave`, { method: "POST" });
+      await apiFetch(`/events/${eventId}/leave`, { method: "POST" });
       toast({ title: "You've left this event." });
       fetchEvents();
     } catch (e) {

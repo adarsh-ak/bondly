@@ -406,14 +406,14 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ROUTES
-app.use('auth', authRoutes);
-app.use('profile', profileRoutes);
-app.use('dashboard', dashboardRoutes);
-app.use('groups', groupRoutes);
-app.use('events', eventRoutes);
-app.use('posts', postRoutes);
-app.use('messages', messageRoutes);
-app.use('flags', flagRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/profile', profileRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/groups', groupRoutes);
+app.use('/api/events', eventRoutes);
+app.use('/api/posts', postRoutes);
+app.use('/api/messages', messageRoutes);
+app.use('/api/flags', flagRoutes);
 
 // HEALTH
 app.get('/api/health', (req, res) => {
