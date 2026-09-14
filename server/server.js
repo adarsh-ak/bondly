@@ -405,6 +405,18 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// DEBUG
+app.get('/api/test', (req, res) => {
+  res.json({
+    message: 'AUTH ROUTE VERSION IS LIVE',
+    routes: [
+      'POST /api/auth/signup',
+      'POST /api/auth/signin',
+      'GET /api/auth/me'
+    ]
+  });
+});
+
 // ROUTES
 app.use('/api/auth', authRoutes);
 app.use('/api/profile', profileRoutes);
