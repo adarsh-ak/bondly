@@ -9,7 +9,7 @@ const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
 
 // ✅ Create socket instance
 export const socket = io(SOCKET_URL, {
-  transports: ["websocket"], // Force pure WebSocket (no polling)
+  transports: ["websocket", "polling"], // Force pure WebSocket (no polling)
   withCredentials: true,     // Allow cookies/credentials
   reconnection: true,        // Enable auto reconnect
   reconnectionAttempts: Infinity, // Keep trying until connected
