@@ -22,32 +22,19 @@ dotenv.config();
 
 const app = express();
 const server = http.createServer(app); // 🔥 IMPORTANT
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',')
-  : ['http://localhost:5173'];
-
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-
-    if (allowedOrigins.includes(origin)) {
+    console.log(origin);
+    if (!origin || origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) {
       return callback(null, true);
     }
-
-    return callback(new Error('Not allowed by CORS'));
+    return callback(null, true);
   },
   credentials: true,
 };
 
 const io = new Server(server, {
-  cors: {
-    origin: [
-      "https://bondly-mu.vercel.app",
-      "http://localhost:5173",
-    ],
-    methods: ["GET", "POST"],
-    credentials: true,
-  },
+  cors: corsOptions,
 });
 
 // ================= GROUP CALL STATE =================
@@ -411,20 +398,12 @@ io.on('connection', (socket) => {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-app.use(
-  cors({
-    origin: [
-      "https://bondly-mu.vercel.app",
-      "http://localhost:5173",
-    ],
-    credentials: true,
-  })
-);
-
 app.use(cors(corsOptions));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ROUTES
 app.use('/api/auth', authRoutes);
